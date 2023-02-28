@@ -39,7 +39,7 @@ def receive():
 
         else:
             # Comando inválido
-            socket.send(b"ERRO: comando inválido.")
+            socket.send("ERRO: formato de mensagem inválido.".encode())
 
 def publish():
     context = zmq.Context()
