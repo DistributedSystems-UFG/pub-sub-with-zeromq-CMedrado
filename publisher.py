@@ -1,69 +1,64 @@
 import zmq
+import threading
 import time
 from constPS import *
 
-context = zmq.Context()
+def receive():
+    context = zmq.Context()
+    socket = context.socket(zmq.REP)
+    socket.bind("tcp://{}:{}".format(HOST, PORT))
 
-# Socket publisher
-s = context.socket(zmq.PUB)
-p = "tcp://{}:{}".format(HOST, PORT)
-s.bind(p)
+    while True:
+        # Espera por uma mensagem
+        message = socket.recv()
 
-# Socket RPC
-rpc_socket = context.socket(zmq.REP)
-rpc_socket.bind("tcp://*:{}".format(RPC_PORT))
+        # Analisa a mensagem recebida
+        parts = message.decode().split(":")
+        if len(parts) != 3:
+            socket.send(b"ERRO: formato de mensagem inválido.")
+            continue
 
-# Dicionário para armazenar as conexões dos clientes
-clients = {}
+        # Envia a mensagem para o destinatário ou para o tópico correspondente
+        if parts[0] == "INDIVIDUAL":
+            # Envio de mensagem individual
+            topic = parts[1]
+            msg = parts[2]
+            socket.send(b"OK")
 
-while True:
-    # Recebe o comando do cliente
-    command = rpc_socket.recv_json()
+            # Publica a mensagem no tópico correspondente
+            publisher.send_string("{} {}".format(topic, msg))
 
-    # Verifica o tipo de mensagem
-    if command['type'] == 'individual':
-        # Envia mensagem individual
-        dest = command['dest']
-        message = command['message']
+        elif parts[0] == "TOPICO":
+            # Envio de mensagem para tópico
+            topic = parts[1]
+            msg = parts[2]
+            socket.send(b"OK")
 
-        if dest not in clients:
-            rpc_socket.send_json({'status': 'error', 'message': 'User not found'})
+            # Publica a mensagem no tópico correspondente
+            publisher.send_string("{} {}".format(topic, msg))
+
         else:
-            dest_socket = clients[dest]
-            dest_socket.send_string(message)
-            rpc_socket.send_json({'status': 'ok'})
+            # Comando inválido
+            socket.send(b"ERRO: comando inválido.")
 
-    elif command['type'] == 'topic':
-        # Envia mensagem para o tópico
-        topic = command['topic']
-        message = command['message']
+def publish():
+    context = zmq.Context()
+    global publisher
+    publisher = context.socket(zmq.PUB)
+    publisher.bind("tcp://{}:{}".format(HOST, PORT))
 
-        s.send_string("{} {}".format(topic, message))
-        rpc_socket.send_json({'status': 'ok'})
+    while True:
+        # Publica a hora atual em um tópico
+        current_time = time.strftime("%H:%M:%S", time.gmtime())
+        message = "HORARIO {}".format(current_time)
+        publisher.send_string("horario {}".format(message))
+        time.sleep(1)
 
-    elif command['type'] == 'register':
-        # Registra um novo cliente
-        username = command['username']
-        client_socket = context.socket(zmq.PAIR)
-        client_socket.bind("inproc://{}".format(username))
-        clients[username] = client_socket
-        rpc_socket.send_json({'status': 'ok'})
+if __name__ == "__main__":
+    # Inicia os threads de recepção e publicação
+    threading.Thread(target=receive).start()
+    threading.Thread(target=publish).start()
 
-    elif command['type'] == 'exit':
-        # Remove um cliente registrado
-        username = command['username']
-        if username in clients:
-            client_socket = clients[username]
-            client_socket.close()
-            del clients[username]
-            rpc_socket.send_json({'status': 'ok'})
-        else:
-            rpc_socket.send_json({'status': 'error', 'message': 'User not found'})
-
-    else:
-        rpc_socket.send_json({'status': 'error', 'message': 'Invalid command'})
-
-    # Publica a hora atual a cada 5 segundos
-    current_time = time.asctime()
-    s.send_string("TIME {}".format(current_time))
-    time.sleep(5)
+    # Espera indefinidamente
+    while True:
+        pass
