@@ -15,7 +15,7 @@ def receive():
         # Analisa a mensagem recebida
         parts = message.decode().split(":")
         if len(parts) != 3:
-            socket.send(b"ERRO: formato de mensagem inválido.")
+            socket.send("ERRO: formato de mensagem inválido.".encode())
             continue
 
         # Envia a mensagem para o destinatário ou para o tópico correspondente
