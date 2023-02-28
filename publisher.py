@@ -1,76 +1,85 @@
-import zmq, time
+import zmq
 import threading
-import pickle
-from constPS import *
+import constPS
 
-# Server to receive individual messages
-def handle_client(conn, addr):
-    # Receives message from the client
-    marshaled_msg_pack = conn.recv(1024)
-    msg_pack = pickle.loads(marshaled_msg_pack)
-    msg = msg_pack[0]
-    dest = msg_pack[1]
-    src = msg_pack[2]
 
-    # Prints information about the message
-    print("MESSAGE: " + msg + " - FROM: " + src + " - TO: " + dest)
+class Server(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.REP)
+        self.socket.bind("tcp://%s:%s" % (constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT))
+        print("Chat server is running...")
 
-    # Checks if the destination is registered in the server
-    try:
-        dest_addr = registry[dest]
-    except:
-        conn.send(pickle.dumps("NACK"))
-        conn.close()
-        return
+    def run(self):
+        while True:
+            # Recebe mensagem do cliente
+            marshaled_msg_pack = self.socket.recv()
+            msg_pack = pickle.loads(marshaled_msg_pack)
+            msg_type = msg_pack[0]
+            msg = msg_pack[1]
+            dest = msg_pack[2]
+            src = msg_pack[3]
 
-    # Sends an ACK message to the client who sent the message
-    conn.send(pickle.dumps("ACK"))
-    conn.close()
+            # Mensagem individual
+            if msg_type == "I":
+                # Encontra o IP e porta do destinatário
+                try:
+                    dest_addr = constPS.registry[dest]
+                except:
+                    self.socket.send(pickle.dumps("NACK"))
+                    continue
 
-    # Creates a connection with the destination client
-    client_sock = zmq.Context().socket(zmq.REQ)
-    dest_ip = dest_addr[0]
-    dest_port = dest_addr[1]
+                # Cria conexão com o destinatário e envia a mensagem
+                try:
+                    client_sock = self.context.socket(zmq.REQ)
+                    client_sock.connect("tcp://%s:%s" % (dest_addr[0], dest_addr[1]))
+                    msg_pack = ("I", msg, src)
+                    marshaled_msg_pack = pickle.dumps(msg_pack)
+                    client_sock.send(marshaled_msg_pack)
+                    marshaled_reply = client_sock.recv()
+                    reply = pickle.loads(marshaled_reply)
+                    client_sock.close()
+                except:
+                    reply = "NACK"
 
-    # Tries to connect to the destination client
-    try:
-        client_sock.connect("tcp://" + dest_ip + ":" + str(dest_port))
-    except:
-        print("Error: Destination client is down")
-        client_sock.close()
-        return
+            # Mensagem para tópico
+            elif msg_type == "T":
+                # Envia a mensagem para todos os assinantes do tópico
+                try:
+                    publisher_sock = self.context.socket(zmq.PUB)
+                    publisher_sock.bind("tcp://%s:%s" % (constPS.PUBLISHER_HOST, constPS.PUBLISHER_PORT))
+                    msg_pack = ("T", msg)
+                    marshaled_msg_pack = pickle.dumps(msg_pack)
+                    publisher_sock.send_multipart([bytes(dest, "utf-8"), marshaled_msg_pack])
+                    publisher_sock.close()
+                    reply = "ACK"
+                except:
+                    reply = "NACK"
 
-    # Sends the message to the destination client and waits for an ACK
-    msg_pack = (msg, src)
-    marshaled_msg_pack = pickle.dumps(msg_pack)
-    client_sock.send(marshaled_msg_pack)
-    marshaled_reply = client_sock.recv()
-    reply = pickle.loads(marshaled_reply)
-    if reply != "ACK":
-        print("Error: Destination client did not receive message properly")
+            # Responde ao cliente
+            self.socket.send(pickle.dumps(reply))
 
-    # Closes the connection with the destination client
-    client_sock.close()
 
-# Publisher to send messages to topics
-def publish():
-    context = zmq.Context()
-    s = context.socket(zmq.PUB)
-    p = "tcp://" + PUB_HOST + ":" + PUB_PORT
-    s.bind(p)
-    while True:
-        topic = input("ENTER TOPIC (PRESS ENTER FOR NO TOPIC): ")
-        if topic == "":
-            topic = "ALL"
-        msg = input("ENTER MESSAGE: ")
-        msg_pack = (msg, topic)
-        marshaled_msg_pack = pickle.dumps(msg_pack)
-        s.send(marshaled_msg_pack)
+class Publisher(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.PUB)
+        self.socket.bind("tcp://%s:%s" % (constPS.PUBLISHER_HOST, constPS.PUBLISHER_PORT))
 
-# Put receiving thread to run
-recv_handler = threading.Thread(target=recv_messages)
-recv_handler.start()
+    def run(self):
+        while True:
+            dest = input("Enter topic to publish message to: ")
+            msg = input("Enter message: ")
+            msg_pack = ("T", msg)
+            marshaled_msg_pack = pickle.dumps(msg_pack)
+            self.socket.send_multipart([bytes(dest, "utf-8"), marshaled_msg_pack])
 
-# Put publishing thread to run
-pub_handler = threading.Thread(target=publish)
-pub_handler.start()
+
+if __name__ == "__main__":
+    # Inicializa servidor e publicador
+    server = Server()
+    server.start()
+    publisher = Publisher()
+    publisher.start()
