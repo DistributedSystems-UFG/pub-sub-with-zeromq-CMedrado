@@ -1,12 +1,12 @@
 import zmq
-from constPS import * #-
+from constPS import HOST, PORT
 
 context = zmq.Context()
-s = context.socket(zmq.SUB)          # create a subscriber socket
-p = "tcp://"+ HOST +":"+ PORT        # how and where to communicate
-s.connect(p)                         # connect to the server
-s.setsockopt_string(zmq.SUBSCRIBE, "TIME")  # subscribe to TIME messages
+s = context.socket(zmq.SUB)  # create a subscriber socket
+p = "tcp://" + HOST + ":" + PORT  # how and where to communicate
+s.connect(p)  # connect socket to the address
+s.setsockopt_string(zmq.SUBSCRIBE, "")  # subscribe to all topics
 
-for i in range(5):  # Five iterations
-	time = s.recv()   # receive a message
-	print (bytes.decode(time))
+while True:
+    message = s.recv_multipart()
+    print(f"Received {message[1].decode()} from topic {message[0].decode()}")
