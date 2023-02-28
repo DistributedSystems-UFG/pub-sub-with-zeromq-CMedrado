@@ -1,40 +1,49 @@
 import zmq
 import threading
-import constPS
+import time
+import sys
+from constPS import *
 
-
-def subscribe_topic():
+# Subscribing to topic(s)
+def subscribe():
     context = zmq.Context()
-    sub = context.socket(zmq.SUB)
-    sub.connect("tcp://{}:{}".format(constPS.HOST, constPS.PORT))
-
-    # Subscribe to all topics
-    sub.subscribe(b"")
-
+    s = context.socket(zmq.SUB)
+    s.connect("tcp://" + HOST + ":" + PORT)
+    topics = input("Enter topic(s) to subscribe (separated by space): ")
+    topics_list = topics.split()
+    for t in topics_list:
+        s.setsockopt_string(zmq.SUBSCRIBE, t)
     while True:
-        msg = sub.recv().decode()
-        print("[TOPIC] " + msg)
+        msg = s.recv()
+        print("TOPIC: " + msg.decode())
 
-
+# Sending individual messages
 def send_message():
     context = zmq.Context()
-    req = context.socket(zmq.REQ)
-    req.connect("tcp://{}:{}".format(constPS.HOST, constPS.PORT))
-
+    s = context.socket(zmq.REQ)
+    s.connect("tcp://" + HOST + ":" + PORT)
     while True:
-        dest = input("Enter destination ('topic' for topic): ")
-        msg = input("Enter message: ")
-
-        if dest == "topic":
-            req.send_string("{}:{}".format(dest, msg))
+        dest = input("ENTER DESTINATION: ")
+        msg = input("ENTER MESSAGE: ")
+        msg_pack = (msg, dest)
+        marshaled_msg_pack = zmq.utils.jsonapi.dumps(msg_pack)
+        s.send(marshaled_msg_pack)
+        marshaled_reply = s.recv()
+        reply = zmq.utils.jsonapi.loads(marshaled_reply)
+        if reply != "ACK":
+            print("Error: Server did not accept the message (dest does not exist?)")
         else:
-            req.send_string("{}:{}".format(dest, msg))
-            reply = req.recv().decode()
-            print("[ACK] " + reply)
+            pass
 
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print("Error: Please specify 'sub' or 'send'")
+        sys.exit(1)
 
-if __name__ == "__main__":
-    t1 = threading.Thread(target=subscribe_topic)
-    t1.start()
-
-    send_message()
+    if sys.argv[1] == "sub":
+        subscribe()
+    elif sys.argv[1] == "send":
+        send_message()
+    else:
+        print("Error: Invalid argument")
+        sys.exit(1)
