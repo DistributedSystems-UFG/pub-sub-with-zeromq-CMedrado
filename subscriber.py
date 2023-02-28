@@ -1,5 +1,6 @@
 import zmq
 import threading
+import pickle
 import constPS
 
 class Subscriber:
