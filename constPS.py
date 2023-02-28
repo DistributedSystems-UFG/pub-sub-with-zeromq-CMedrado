@@ -6,7 +6,7 @@ PUBLISHER_PORT = 5001
 
 TOPIC_SERVER_HOST = "127.0.0.1"
 TOPIC_SERVER_PORT = 5002
-
+CLIENT_NAME = "CLIENT"
 registry = {
     'alice': ("172.31.48.169", 12001),
     'bob': ("172.31.48.169", 12002),
