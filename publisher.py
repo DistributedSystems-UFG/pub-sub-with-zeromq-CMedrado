@@ -1,64 +1,104 @@
 import zmq
-import threading
 import time
+import threading
 from constPS import *
 
-def receive():
-    context = zmq.Context()
-    socket = context.socket(zmq.REP)
-    socket.bind("tcp://{}:{}".format(HOST, PORT))
+context = zmq.Context()
 
-    while True:
-        # Espera por uma mensagem
-        message = socket.recv()
+# Initialize publisher socket
+publisher_socket = context.socket(zmq.PUB)
+publisher_address = f"tcp://{HOST}:{PUBLISHER_PORT}"
+publisher_socket.bind(publisher_address)
 
-        # Analisa a mensagem recebida
-        parts = message.decode().split(":")
-        if len(parts) != 3:
-            socket.send("ERRO: formato de mensagem inválido.".encode())
-            continue
+# Initialize subscriber socket
+subscriber_socket = context.socket(zmq.SUB)
+subscriber_address = f"tcp://{HOST}:{SUBSCRIBER_PORT}"
+subscriber_socket.bind(subscriber_address)
 
-        # Envia a mensagem para o destinatário ou para o tópico correspondente
-        if parts[0] == "INDIVIDUAL":
-            # Envio de mensagem individual
-            topic = parts[1]
-            msg = parts[2]
-            socket.send(b"OK")
+# Initialize RPC socket
+rpc_socket = context.socket(zmq.REP)
+rpc_address = f"tcp://{HOST}:{RPC_PORT}"
+rpc_socket.bind(rpc_address)
 
-            # Publica a mensagem no tópico correspondente
-            publisher.send_string("{} {}".format(topic, msg))
 
-        elif parts[0] == "TOPICO":
-            # Envio de mensagem para tópico
-            topic = parts[1]
-            msg = parts[2]
-            socket.send(b"OK")
+# Handler for receiving messages from individual clients
+class IndividualMessageHandler(threading.Thread):
+    def __init__(self, socket):
+        threading.Thread.__init__(self)
+        self.socket = socket
 
-            # Publica a mensagem no tópico correspondente
-            publisher.send_string("{} {}".format(topic, msg))
+    def run(self):
+        while True:
+            message = self.socket.recv_json()
+            topic = message['to']
+            publisher_socket.send_string(f"{topic} {message['message']}")
+            self.socket.send_json({'status': 'OK'})
+        return
 
+
+# Handler for receiving messages from topics
+class TopicMessageHandler(threading.Thread):
+    def __init__(self, socket):
+        threading.Thread.__init__(self)
+        self.socket = socket
+
+    def run(self):
+        while True:
+            message = self.socket.recv_json()
+            topic = message['to']
+            publisher_socket.send_string(f"{topic} {message['message']}")
+            self.socket.send_json({'status': 'OK'})
+        return
+
+
+# Handler for receiving RPC calls
+class RPCHandler(threading.Thread):
+    def __init__(self, socket):
+        threading.Thread.__init__(self)
+        self.socket = socket
+
+    def run(self):
+        while True:
+            message = self.socket.recv_json()
+            topic = message['to']
+            publisher_socket.send_string(f"{topic} {message['message']}")
+            self.socket.send_json({'status': 'OK'})
+        return
+
+
+# Start individual message handler
+individual_handler = IndividualMessageHandler(subscriber_socket)
+individual_handler.start()
+
+# Start topic message handler
+topic_handler = TopicMessageHandler(subscriber_socket)
+topic_handler.start()
+
+# Start RPC handler
+rpc_handler = RPCHandler(rpc_socket)
+rpc_handler.start()
+
+# Main loop
+while True:
+    # Prompt user for command
+    command = input("Enter command (i for individual, t for topic): ")
+
+    if command == 'i':
+        # Send message to an individual client
+        to = input("Enter recipient's ID: ")
+        message = input("Enter message: ")
+        rpc_socket.send_json({'to': to, 'message': message})
+        reply = rpc_socket.recv_json()
+        if reply['status'] == 'OK':
+            print("Message sent successfully")
         else:
-            # Comando inválido
-            socket.send("ERRO: formato de mensagem inválido.".encode())
+            print("Error sending message")
 
-def publish():
-    context = zmq.Context()
-    global publisher
-    publisher = context.socket(zmq.PUB)
-    publisher.bind("tcp://{}:{}".format(HOST, PORT))
-
-    while True:
-        # Publica a hora atual em um tópico
-        current_time = time.strftime("%H:%M:%S", time.gmtime())
-        message = "HORARIO {}".format(current_time)
-        publisher.send_string("horario {}".format(message))
-        time.sleep(1)
-
-if __name__ == "__main__":
-    # Inicia os threads de recepção e publicação
-    threading.Thread(target=receive).start()
-    threading.Thread(target=publish).start()
-
-    # Espera indefinidamente
-    while True:
-        pass
+    elif command == 't':
+        # Send message to a topic
+        topic = input("Enter topic: ")
+        message = input("Enter message: ")
+        publisher_socket.send_string(f"{topic} {message}")
+        print("Message sent successfully")
+    else:
+        print("Invalid command, please try again.")
