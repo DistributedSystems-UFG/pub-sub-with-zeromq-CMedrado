@@ -7,10 +7,19 @@ class Subscriber:
     def __init__(self):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.SUB)
+        self.topics = set()
 
     def subscribe(self, topic):
         self.socket.setsockopt_string(zmq.SUBSCRIBE, topic)
         self.socket.connect("tcp://%s:%s" % (constPS.TOPIC_SERVER_HOST, constPS.TOPIC_SERVER_PORT))
+        self.topics.add(topic)
+
+    def unsubscribe(self, topic):
+        self.socket.setsockopt_string(zmq.UNSUBSCRIBE, topic)
+        self.topics.remove(topic)
+
+    def get_topics(self):
+        return self.topics
 
     def run(self):
         while True:
@@ -52,23 +61,22 @@ if __name__ == "__main__":
                 print("Message sent successfully")
             client_sock.close()
         elif dest_type == "topic":
-            action = input("Enter action (add, remove, list): ")
+            action = input("Enter action (add, remove, get): ")
             if action == "add":
                 topic = input("Enter topic: ")
-                constPS.add_topic(topic)
                 subscriber.subscribe(topic)
                 print("Topic subscribed successfully")
             elif action == "remove":
                 topic = input("Enter topic: ")
-                constPS.remove_topic(topic)
                 subscriber.unsubscribe(topic)
                 print("Topic unsubscribed successfully")
-            elif action == "list":
-                print("Subscribed topics: %s" % constPS.topics)
+            elif action == "get":
+                topics = subscriber.get_topics()
+                print("Subscribed topics:", topics)
             else:
                 print("Invalid action")
                 continue
-
+        
             msg = input("Enter message: ")
             # Publica mensagem em tópico
             topic_socket = subscriber.context.socket(zmq.PUB)
