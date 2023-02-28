@@ -1,49 +1,54 @@
 import zmq
-import threading
 import time
-import sys
-from constPS import *
+import constPS
 
-# Subscribing to topic(s)
-def subscribe():
-    context = zmq.Context()
-    s = context.socket(zmq.SUB)
-    s.connect("tcp://" + HOST + ":" + PORT)
-    topics = input("Enter topic(s) to subscribe (separated by space): ")
-    topics_list = topics.split()
-    for t in topics_list:
-        s.setsockopt_string(zmq.SUBSCRIBE, t)
-    while True:
-        msg = s.recv()
-        print("TOPIC: " + msg.decode())
 
-# Sending individual messages
-def send_message():
-    context = zmq.Context()
-    s = context.socket(zmq.REQ)
-    s.connect("tcp://" + HOST + ":" + PORT)
-    while True:
-        dest = input("ENTER DESTINATION: ")
-        msg = input("ENTER MESSAGE: ")
-        msg_pack = (msg, dest)
-        marshaled_msg_pack = zmq.utils.jsonapi.dumps(msg_pack)
-        s.send(marshaled_msg_pack)
-        marshaled_reply = s.recv()
-        reply = zmq.utils.jsonapi.loads(marshaled_reply)
+class Client:
+    def __init__(self, name):
+        self.name = name
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
+        self.socket.setsockopt(zmq.SUBSCRIBE, b"")
+        self.socket.connect("tcp://%s:%s" % (constPS.PUBLISHER_HOST, constPS.PUBLISHER_PORT))
+
+    def subscribe_to_topic(self, topic):
+        self.socket.setsockopt(zmq.SUBSCRIBE, topic.encode())
+
+    def receive_messages(self):
+        while True:
+            msg = self.socket.recv()
+            print(msg.decode())
+
+    def send_message_to_user(self, dest, message):
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        socket.connect("tcp://%s:%s" % (constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT))
+        msg_pack = (message, dest, self.name)
+        marshaled_msg_pack = pickle.dumps(msg_pack)
+        socket.send(marshaled_msg_pack)
+        marshaled_reply = socket.recv()
+        reply = pickle.loads(marshaled_reply)
         if reply != "ACK":
             print("Error: Server did not accept the message (dest does not exist?)")
         else:
-            pass
+            print("Message sent successfully!")
+        socket.close()
 
-if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print("Error: Please specify 'sub' or 'send'")
-        sys.exit(1)
 
-    if sys.argv[1] == "sub":
-        subscribe()
-    elif sys.argv[1] == "send":
-        send_message()
-    else:
-        print("Error: Invalid argument")
-        sys.exit(1)
+if __name__ == "__main__":
+    client_name = input("Enter your name: ")
+    client = Client(client_name)
+
+    while True:
+        msg_type = input("Enter message type (1 - individual, 2 - topic): ")
+        if msg_type == "1":
+            dest = input("Enter destination user: ")
+            message = input("Enter message: ")
+            client.send_message_to_user(dest, message)
+        elif msg_type == "2":
+            topic = input("Enter topic to subscribe: ")
+            client.subscribe_to_topic(topic)
+            print("Subscribed to topic %s" % topic)
+            client.receive_messages()
+        else:
+            print("Invalid message type. Try again.")
