@@ -84,7 +84,7 @@ def publish_message():
 if __name__ == "__main__":
     # Cria o socket do servidor
     server_sock = socket(AF_INET, SOCK_STREAM)
-    server_sock.bind((CHAT_SERVER_HOST, CHAT_SERVER_PORT))
+    server_sock.bind((HOST, PORT))
     server_sock.listen(5)
     print("Chat Server is ready...")
 
