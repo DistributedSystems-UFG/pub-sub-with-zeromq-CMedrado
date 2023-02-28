@@ -2,7 +2,6 @@ import zmq
 import threading
 import constPS
 
-
 # Servidor de chat
 class ChatServer:
     def __init__(self):
@@ -61,10 +60,8 @@ class ChatServer:
         # Publica a mensagem no tópico
         topic_socket = self.context.socket(zmq.PUB)
         topic_socket.bind("tcp://%s:%s" % (constPS.TOPIC_SERVER_HOST, constPS.TOPIC_SERVER_PORT))
-        topic_socket.send_string(
-            "%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, pickle.dumps((src, msg))))
+        topic_socket.send_string("%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, pickle.dumps((src, msg))))
         topic_socket.close()
-
 
 # Servidor de tópicos
 class TopicServer:
@@ -79,21 +76,12 @@ class TopicServer:
             message = self.socket.recv_string()
             topic, message = message.split(" ", 1)
             print("TOPIC MESSAGE: %s - FROM: %s" % (message, topic))
-            # Envia a mensagem para todos os assinantes do tópico
-            sub_socket = self.context.socket(zmq.REQ)
-            for addr in constPS.topic_subscribers.get(topic, []):
-                try:
-                    sub_socket.connect("tcp://%s:%s" % addr)
-                    sub_socket.send(message.encode())
-                    sub_socket.recv()
-                except:
-                    print("Error: Subscriber %s is down" % str(addr))
-            sub_socket.close()
 
-
-if name == "main":
+# Programa principal
+if __name__ == "__main__":
     chat_server = ChatServer()
     topic_server = TopicServer()
+
     chat_thread = threading.Thread(target=chat_server.run)
     topic_thread = threading.Thread(target=topic_server.run)
 
