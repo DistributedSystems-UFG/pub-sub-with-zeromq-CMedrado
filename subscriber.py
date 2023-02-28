@@ -36,7 +36,7 @@ if __name__ == "__main__":
             dest = input("Enter username: ")
             msg = input("Enter message: ")
             # Envia mensagem individual
-            client_sock = subscriber.context.socket(zmq.REQ)
+            client_sock = self.context.socket(zmq.REQ)
             try:
                 dest_addr = constPS.registry[dest]
             except:
