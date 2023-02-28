@@ -54,14 +54,25 @@ class ChatServer:
         client_sock.close()
 
     def handle_topic_msg(self, msg_pack):
-        topic = msg_pack[1]
-        src = msg_pack[2]
-        msg = msg_pack[3]
-        # Publica a mensagem no tópico
-        topic_socket = self.context.socket(zmq.PUB)
-        topic_socket.bind("tcp://%s:%s" % (constPS.TOPIC_SERVER_HOST, constPS.TOPIC_SERVER_PORT))
-        topic_socket.send_string("%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, pickle.dumps((src, msg))))
-        topic_socket.close()
+        cmd = msg_pack[1]
+        if cmd == "add_topic":
+            topic = msg_pack[2]
+            if topic not in constPS.topics:
+                constPS.topics.append(topic)
+                self.socket.send(pickle.dumps(("ACK", "Topic added successfully")))
+            else:
+                self.socket.send(pickle.dumps(("ACK", "Topic already exists")))
+        elif cmd == "remove_topic":
+            topic = msg_pack[2]
+            if topic in constPS.topics:
+                constPS.topics.remove(topic)
+                self.socket.send(pickle.dumps(("ACK", "Topic removed successfully")))
+            else:
+                self.socket.send(pickle.dumps(("ACK", "Topic does not exist")))
+        elif cmd == "list_topics":
+            self.socket.send(pickle.dumps(("ACK", constPS.topics)))
+        else:
+            self.socket.send(pickle.dumps(("ACK", "Invalid command")))
 
 # Servidor de tópicos
 class TopicServer:
@@ -70,17 +81,52 @@ class TopicServer:
         self.socket = self.context.socket(zmq.SUB)
         self.socket.setsockopt_string(zmq.SUBSCRIBE, "")
         self.socket.bind("tcp://%s:%s" % (constPS.TOPIC_SERVER_HOST, constPS.TOPIC_SERVER_PORT))
+        self.topics = {}
 
     def run(self):
         while True:
             message = self.socket.recv_string()
             topic, message = message.split(" ", 1)
             print("TOPIC MESSAGE: %s - FROM: %s" % (message, topic))
+            
+    def add_topic(self, topic):
+        if topic not in self.topics:
+            self.topics[topic] = []
+            print("Topic %s has been added" % topic)
+        else:
+            print("Topic %s already exists" % topic)
+
+    def remove_topic(self, topic):
+        if topic in self.topics:
+            del self.topics[topic]
+            print("Topic %s has been removed" % topic)
+        else:
+            print("Topic %s does not exist" % topic)
+
+    def query_topic(self, topic):
+        if topic in self.topics:
+            print("Messages for topic %s:" % topic)
+            for message in self.topics[topic]:
+                print("- %s" % message)
+        else:
+            print("Topic %s does not exist" % topic)       
 
 # Programa principal
 if __name__ == "__main__":
     chat_server = ChatServer()
     topic_server = TopicServer()
+    
+    add_topic_thread = threading.Thread(target=lambda: topic_server.add_topic("test"))
+    remove_topic_thread = threading.Thread(target=lambda: topic_server.remove_topic("test"))
+    query_topic_thread = threading.Thread(target=lambda: topic_server.query_topic("test"))
+
+    add_topic_thread.start()
+    remove_topic_thread.start()
+    query_topic_thread.start()
+
+    add_topic_thread.join()
+    remove_topic_thread.join()
+    query_topic_thread.join()
 
     chat_thread = threading.Thread(target=chat_server.run)
     topic_thread = threading.Thread(target=topic_server.run)
