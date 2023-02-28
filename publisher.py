@@ -1,7 +1,7 @@
 import zmq
 import threading
 import constPS
-
+import pickle
 
 class Server(threading.Thread):
     def __init__(self):
