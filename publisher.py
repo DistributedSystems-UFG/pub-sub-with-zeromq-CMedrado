@@ -4,101 +4,52 @@ import threading
 from constPS import *
 
 context = zmq.Context()
+pub_socket = context.socket(zmq.PUB)
+pub_address = f"tcp://{HOST}:{PORT}"
+pub_socket.bind(pub_address)
 
-# Initialize publisher socket
-publisher_socket = context.socket(zmq.PUB)
-publisher_address = f"tcp://{HOST}:{PUBLISHER_PORT}"
-publisher_socket.bind(publisher_address)
+def send_individual_message(dest, msg):
+    req_socket = context.socket(zmq.REQ)
+    req_address = f"tcp://{HOST}:{INDIVIDUAL_REQ_PORT}"
+    req_socket.connect(req_address)
+    req_socket.send_pyobj((dest, msg))
+    ack = req_socket.recv_string()
+    if ack != "ACK":
+        print(f"Error sending message to {dest}")
+    req_socket.close()
 
-# Initialize subscriber socket
-subscriber_socket = context.socket(zmq.SUB)
-subscriber_address = f"tcp://{HOST}:{SUBSCRIBER_PORT}"
-subscriber_socket.bind(subscriber_address)
+def send_topic_message(topic, msg):
+    pub_socket.send_string(f"{topic} {msg}")
 
-# Initialize RPC socket
-rpc_socket = context.socket(zmq.REP)
-rpc_address = f"tcp://{HOST}:{RPC_PORT}"
-rpc_socket.bind(rpc_address)
-
-
-# Handler for receiving messages from individual clients
-class IndividualMessageHandler(threading.Thread):
-    def __init__(self, socket):
+class RecvHandler(threading.Thread):
+    def __init__(self, sock):
         threading.Thread.__init__(self)
-        self.socket = socket
+        self.client_socket = sock
 
     def run(self):
         while True:
-            message = self.socket.recv_json()
-            topic = message['to']
-            publisher_socket.send_string(f"{topic} {message['message']}")
-            self.socket.send_json({'status': 'OK'})
+            (conn, addr) = self.client_socket.accept()
+            msg_type = conn.recv(1024).decode("utf-8")
+            if msg_type == "I":
+                dest, msg = conn.recv(1024).decode("utf-8").split(" ")
+                send_individual_message(dest, msg)
+                conn.send(b"ACK")
+            elif msg_type == "T":
+                topic, msg = conn.recv(1024).decode("utf-8").split(" ")
+                send_topic_message(topic, msg)
+                conn.send(b"ACK")
+            else:
+                conn.send(b"NACK")
+            conn.close()
         return
 
+server_sock = context.socket(zmq.REP)
+server_address = f"tcp://{HOST}:{SERVER_REQ_PORT}"
+server_sock.bind(server_address)
 
-# Handler for receiving messages from topics
-class TopicMessageHandler(threading.Thread):
-    def __init__(self, socket):
-        threading.Thread.__init__(self)
-        self.socket = socket
-
-    def run(self):
-        while True:
-            message = self.socket.recv_json()
-            topic = message['to']
-            publisher_socket.send_string(f"{topic} {message['message']}")
-            self.socket.send_json({'status': 'OK'})
-        return
-
-
-# Handler for receiving RPC calls
-class RPCHandler(threading.Thread):
-    def __init__(self, socket):
-        threading.Thread.__init__(self)
-        self.socket = socket
-
-    def run(self):
-        while True:
-            message = self.socket.recv_json()
-            topic = message['to']
-            publisher_socket.send_string(f"{topic} {message['message']}")
-            self.socket.send_json({'status': 'OK'})
-        return
-
-
-# Start individual message handler
-individual_handler = IndividualMessageHandler(subscriber_socket)
-individual_handler.start()
-
-# Start topic message handler
-topic_handler = TopicMessageHandler(subscriber_socket)
-topic_handler.start()
-
-# Start RPC handler
-rpc_handler = RPCHandler(rpc_socket)
-rpc_handler.start()
-
-# Main loop
 while True:
-    # Prompt user for command
-    command = input("Enter command (i for individual, t for topic): ")
-
-    if command == 'i':
-        # Send message to an individual client
-        to = input("Enter recipient's ID: ")
-        message = input("Enter message: ")
-        rpc_socket.send_json({'to': to, 'message': message})
-        reply = rpc_socket.recv_json()
-        if reply['status'] == 'OK':
-            print("Message sent successfully")
-        else:
-            print("Error sending message")
-
-    elif command == 't':
-        # Send message to a topic
-        topic = input("Enter topic: ")
-        message = input("Enter message: ")
-        publisher_socket.send_string(f"{topic} {message}")
-        print("Message sent successfully")
-    else:
-        print("Invalid command, please try again.")
+    msg_pack = server_sock.recv_pyobj()
+    dest = msg_pack[0]
+    msg = msg_pack[1]
+    send_individual_message(dest, msg)
+    server_sock.send_string("ACK")
