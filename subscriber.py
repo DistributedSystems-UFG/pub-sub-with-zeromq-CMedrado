@@ -52,32 +52,31 @@ if __name__ == "__main__":
                 print("Message sent successfully")
             client_sock.close()
         elif dest_type == "topic":
-            topic = input("Enter topic: ")
-            msg = input("Enter message: ")
+            action = input("Enter action (add, remove, list): ")
+            if action == "add":
+                topic = input("Enter topic: ")
+                constPS.add_topic(topic)
+                subscriber.subscribe(topic)
+                print("Topic subscribed successfully")
+            elif action == "remove":
+                topic = input("Enter topic: ")
+                constPS.remove_topic(topic)
+                subscriber.unsubscribe(topic)
+                print("Topic unsubscribed successfully")
+            elif action == "list":
+                print("Subscribed topics: %s" % constPS.topics)
+            else:
+                print("Invalid action")
+                continue
 
+            msg = input("Enter message: ")
             # Publica mensagem em tópico
             topic_socket = subscriber.context.socket(zmq.PUB)
             topic_socket.connect("tcp://%s:%s" % (constPS.TOPIC_SERVER_HOST, constPS.TOPIC_SERVER_PORT))
-
             msg_pack = (dest_type, topic, constPS.CLIENT_NAME, msg)
             marshaled_msg_pack = pickle.dumps(msg_pack)
             topic_socket.send_string("%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, marshaled_msg_pack))
             topic_socket.close()
-
-        elif dest_type == "add":
-            topic = input("Enter topic to add: ")
-            subscriber.subscribe(topic)
-
-        elif dest_type == "remove":
-            topic = input("Enter topic to remove: ")
-            subscriber.unsubscribe(topic)
-
-        elif dest_type == "list":
-            print(constPS.topics)
-
-        else:
-            print("Invalid destination type")
-            continue
 
     subscriber_thread = threading.Thread(target=subscriber.run)
     subscriber_thread.start()
