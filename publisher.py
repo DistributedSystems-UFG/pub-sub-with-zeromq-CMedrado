@@ -50,8 +50,8 @@ class ChatServer:
         subscribers = self.topic_registry.get_subscribers(topic)
         for address in subscribers:
             topic_socket.connect("tcp://%s:%s" % address)
-        # Publica a mensagem para os clientes inscritos e fecha o socket
-        topic_socket.send_string("%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, pickle.dumps((src, msg))))
+            # Publica a mensagem para os clientes inscritos e fecha o socket
+            topic_socket.send_string("%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, pickle.dumps((src, msg))))
         topic_socket.close()
 
     def handle_topic_msg(self, msg_pack):
