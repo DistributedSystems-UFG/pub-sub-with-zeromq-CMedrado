@@ -41,7 +41,7 @@ while True:
 
     # Recebe mensagens de tópicos
     try:
-        topic, message = topic_socket.recv_multipart(flags=zmq.NOBLOCK)
+        topic, message = topic_socket.recv_multipart()
         # Envia a mensagem para todos os usuários inscritos no tópico
         if topic in topics:
             for subscriber in topics[topic]:
@@ -65,3 +65,4 @@ while True:
         topics[topic].add(subscriber.decode("utf-8"))
     except zmq.Again:
         pass
+
