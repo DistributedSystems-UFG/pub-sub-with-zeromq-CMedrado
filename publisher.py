@@ -1,7 +1,7 @@
 import zmq
 
 # Constantes
-HOST = "172.31.48.169"
+HOST = "127.0.0.1"
 TOPIC_PORT = 5556
 RPC_PORT = 5557
 
