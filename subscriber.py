@@ -1,6 +1,10 @@
 import zmq
 import threading
-from constPS import *
+
+# Configurações
+SERVER_ADDR = "127.0.0.1"
+SERVER_PORT = "5000"
+TOPIC_PORT = "5001"
 
 context = zmq.Context()
 
@@ -54,4 +58,3 @@ def client():
 sub_thread = threading.Thread(target=subscriber)
 sub_thread.start()
 client()
-
