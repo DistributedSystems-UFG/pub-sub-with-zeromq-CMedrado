@@ -2,7 +2,7 @@ import zmq
 import threading
 
 # Configurações
-SERVER_ADDR = "172.31.48.169"
+SERVER_ADDR = "127.0.0.1"
 SERVER_PORT = "5000"
 TOPIC_PORT = "5001"
 
