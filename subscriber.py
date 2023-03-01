@@ -1,6 +1,6 @@
 import zmq
 import threading
-from constMP import *
+from constPS import *
 
 context = zmq.Context()
 
