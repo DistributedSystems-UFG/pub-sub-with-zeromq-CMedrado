@@ -1,6 +1,9 @@
 import zmq
-import threading
-from constPS import *
+
+# Constantes
+HOST = "localhost"
+TOPIC_PORT = 5556
+RPC_PORT = 5557
 
 # Inicializa o contexto ZeroMQ
 context = zmq.Context()
@@ -62,4 +65,3 @@ while True:
         topics[topic].add(subscriber.decode("utf-8"))
     except zmq.Again:
         pass
-
