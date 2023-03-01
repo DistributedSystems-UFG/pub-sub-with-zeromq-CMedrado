@@ -56,34 +56,21 @@ class ChatServer:
         await self.socket.send(marshaled_reply)
         client_sock.close()
 
-    async def handle_topic_msg(self, msg_pack):
-        topic = msg_pack[1]
-        src = msg_pack[2]
-        msg = msg_pack[3]
-        # Publica a mensagem no tópico
-        topic_socket = self.context.socket(zmq.PUB)
-        topic_socket.bind("tcp://%s:%s" % (constPS.TOPIC_SERVER_HOST, constPS.TOPIC_SERVER_PORT))
-        topic_socket.send_string("%s %s:%s %s" % (topic, constPS.CHAT_SERVER_HOST, constPS.CHAT_SERVER_PORT, pickle.dumps((src, msg))))
-        topic_socket.close()
-        reply = ("ACK", "Message sent successfully")
-        marshaled_reply = pickle.dumps(reply)
-        await self.socket.send(marshaled_reply)
-    async def run(self):
-        while True:
-            marshaled_msg_pack = await self.socket.recv()
-            msg_pack = pickle.loads(marshaled_msg_pack)
-            if msg_pack[0] == "register":
-                self.registry[msg_pack[1]] = (msg_pack[2], msg_pack[3])
-                reply = "ACK"
-                marshaled_reply = pickle.dumps(reply)
-                await self.socket.send(marshaled_reply)
-            elif msg_pack[0] == "get_registry":
-                marshaled_reply = pickle.dumps(self.registry)
-                await self.socket.send(marshaled_reply)
-            else:
-                await self.handle_msg(msg_pack)
+        async def run(self):
+            while True:
+                marshaled_msg_pack = await self.socket.recv()
+                msg_pack = pickle.loads(marshaled_msg_pack)
+                if msg_pack[0] == "register":
+                    self.registry[msg_pack[1]] = (msg_pack[2], msg_pack[3])
+                    reply = "ACK"
+                    marshaled_reply = pickle.dumps(reply)
+                    await self.socket.send(marshaled_reply)
+                elif msg_pack[0] == "get_registry":
+                    marshaled_reply = pickle.dumps(self.registry)
+                    await self.socket.send(marshaled_reply)
+                else:
+                    await self.handle_msg(msg_pack)
 
-if __name__ == "__main__":
-    chat_server = ChatServer()
-    asyncio.run(chat_server.run())
-
+    if __name__ == "__main__":
+        chat_server = ChatServer()
+        asyncio.run(chat_server.run())
